@@ -1,12 +1,14 @@
+library(testthat)
+library(googleAnalyticsR)
+library(googleAuthR)
+
+googleAuthR::gar_cache_setup("googleAnalyticsR", location = "mock")
+
 options(googleAuthR.scopes.selected = c("https://www.googleapis.com/auth/analytics",
                                         "https://www.googleapis.com/auth/analytics.edit",
                                         "https://www.googleapis.com/auth/analytics.manage.users.readonly",
                                         "https://www.googleapis.com/auth/cloud-platform",
                                         "https://www.googleapis.com/auth/devstorage.full_control"))
-
-library(googleAnalyticsR)
-library(bigQueryR)
-library(googleCloudStorageR)
 
 accountId <- 54019251
 webPropId <- "UA-54019251-4"
@@ -16,34 +18,10 @@ accountId2 <- 47480439
 webPropId2 <- "UA-47480439-2"
 ga_id2 <- 81416156
 
-context("Authentication")
-
-test_that("Scopes all set correctly", {
-  
-  scopes <- getOption("googleAuthR.scopes.selected")
-  
-  expect_equal(scopes, c("https://www.googleapis.com/auth/analytics",
-                         "https://www.googleapis.com/auth/analytics.edit",
-                         "https://www.googleapis.com/auth/analytics.manage.users.readonly",
-                         "https://www.googleapis.com/auth/cloud-platform",
-                         "https://www.googleapis.com/auth/devstorage.full_control"))
-  
-})
-
-test_that("Auth check", {
-  skip_on_cran()
-  options(googleAuthR.httr_oauth_cache = "httr-oauth.rds")
-  expect_s3_class(googleAuthR::gar_auth("httr-oauth.rds"), "Token2.0")
-})
+# when not mocking
+# googleAuthR::gar_auth()
 
 context("Accounts")
-
-test_that("Get the account summary list", {
-  skip_on_cran()
-  al <- ga_account_list()
-  expect_s3_class(al, "data.frame")
-  
-})
 
 test_that("Get the account list", {
   skip_on_cran()
@@ -52,6 +30,16 @@ test_that("Get the account list", {
   expect_equal(al$kind, "analytics#accounts")
   
 })
+
+
+
+test_that("Get the account summary list", {
+  skip_on_cran()
+  al <- ga_account_list()
+  expect_s3_class(al, "data.frame")
+  
+})
+
 
 context("Webproperties")
 
@@ -114,7 +102,6 @@ context("Custom data source")
 test_that("Custom data source list",{
   skip_on_cran()
   ds <- ga_custom_datasource(accountId2, webPropId2)
-  print(ds)
   
   expect_equal(ds$kind, "analytics#customDataSource")
 })
@@ -124,7 +111,6 @@ test_that("Custom data source upload list",{
   ds <- ga_custom_upload_list(accountId2, 
                               webPropertyId = webPropId2, 
                               customDataSourceId = "_jDsJHSFSU-uw038Bh8fUg")
-  print(ds)
   
   expect_s3_class(ds, "data.frame")
 })
@@ -175,7 +161,7 @@ test_that("v3 multi account batching without flag", {
   
   skip_on_cran()
   multi <- google_analytics(c(ga_id, ga_id2),
-                            start = "2015-07-30", end = "2015-10-01",
+                            start = "2015-07-31", end = "2015-10-01",
                             dimensions=c('medium'), 
                             metrics = c('sessions'),
                             sort = "ga:sessions")
@@ -190,7 +176,7 @@ test_that("v3 multi account batching without flag", {
 test_that("v3 multi account batching with flag", {
   skip_on_cran()
   
-  multi <- google_analytics(c(ga_id, ga_id2),
+  multi <- google_analytics(c(ga_id2, ga_id),
                             start = "2015-07-30", end = "2015-10-01",
                             dimensions=c('medium'), 
                             metrics = c('sessions'),
@@ -207,12 +193,13 @@ test_that("v3 multi account batching with flag", {
 test_that("v3 WALK data", {
   skip_on_cran()
   
-  walked <- google_analytics(ga_id,
-                            start = "2015-07-30", end = "2015-10-01",
-                            dimensions=c('medium'), 
-                            metrics = c('sessions'),
-                            sort = "ga:sessions",
-                            samplingLevel = "WALK")
+  walked <- suppressWarnings(
+    google_analytics(ga_id,
+                     start = "2015-07-30", end = "2015-10-01",
+                     dimensions=c('medium'), 
+                     metrics = c('sessions'),
+                     sort = "ga:sessions",
+                     samplingLevel = "WALK"))
   
   expect_s3_class(walked, "data.frame")  
   
@@ -527,8 +514,7 @@ test_that("Segment v4 syntax works - simple", {
                                         c("2015-07-30","2015-10-01"), 
                                         dimensions=c('source','medium','segment'), 
                                         segments = segment4, 
-                                        metrics = c('sessions','bounces')
-  )
+                                        metrics = c('sessions','bounces'))
   
   expect_s3_class(segment_example, "data.frame")
   
@@ -565,8 +551,7 @@ test_that("Segment v4 Syntax - step sequence", {
                                             c("2016-01-01","2016-03-01"), 
                                             dimensions=c('source','segment'), 
                                             segments = segment4_seq,
-                                            metrics = c('sessions','bounces')
-  )
+                                            metrics = c('sessions','bounces'))
   
   
   expect_s3_class(segment_seq_example, "data.frame")
@@ -576,20 +561,19 @@ test_that("Segment v4 Syntax - step sequence", {
 
 context("Upload")
 
-test_that("Can upload a data.frame ", {
-  skip_on_cran()
-  upload_me <- data.frame(medium = "shinyapps", 
-                          source = "referral", 
-                          adCost = 1, 
-                          date = "20160801")
-  
-  rr <- ga_custom_upload_file(47480439, "UA-47480439-2", "_jDsJHSFSU-uw038Bh8fUg", upload_me)
-  expect_equal(rr$kind, "analytics#upload")
-  
-  new_rr <- ga_custom_upload(upload_object = rr)
-  print(new_rr)
-  expect_equal(rr$kind, "analytics#upload")
-})
+# test_that("Can upload a data.frame ", {
+#   skip_on_cran()
+#   upload_me <- data.frame(medium = "shinyapps", 
+#                           source = "referral", 
+#                           adCost = 1, 
+#                           date = "20160801")
+#   
+#   rr <- ga_custom_upload_file(47480439, "UA-47480439-2", "_jDsJHSFSU-uw038Bh8fUg", upload_me)
+#   expect_equal(rr$kind, "analytics#upload")
+#   
+#   new_rr <- ga_custom_upload(upload_object = rr)
+#   expect_equal(rr$kind, "analytics#upload")
+# })
 
 context("Custom metrics download")
 
@@ -610,34 +594,7 @@ test_that("Can get specific custom dimension", {
 })
 
 
-context("BigQuery")
 
-test_that("Can query from BigQuery using parser", {
-  skip_on_cran()
-  
-  bq_result <- google_analytics_bq("mark-edmondson-gde",
-                                   "98288890",
-                                   start = "2015-08-10", end = "2016-03-01",
-                                   metrics = c("sessions","users"),
-                                   dimensions = c("date","medium"))
-  
-  expect_s3_class(bq_result, "data.frame")
-  
-})
-
-test_that("Can query from BigQuery directly",{
-  skip_on_cran()
-  
-  q <- "SELECT fullVisitorId, visitId, date, hits.hour as hour, hits.minute as minute FROM (TABLE_DATE_RANGE([98288890.ga_sessions_], TIMESTAMP('2016-08-10'), TIMESTAMP('2016-09-01'))) group by fullVisitorId, visitId, date, hour, minute LIMIT 10000"
-  
-  bq_result <- google_analytics_bq("mark-edmondson-gde",
-                                   "98288890",
-                                   query = q)
-  
-  expect_s3_class(bq_result, "data.frame")
-  
-  
-})
 
 context("Goals")
 
@@ -733,3 +690,32 @@ test_that("Allowed metrics call", {
   expect_type(d3, "character")
   
 })
+
+# context("BigQuery")
+# 
+# test_that("Can query from BigQuery using parser", {
+#   skip_on_cran()
+#   
+#   bq_result <- google_analytics_bq("mark-edmondson-gde",
+#                                    "98288890",
+#                                    start = "2015-08-10", end = "2016-03-01",
+#                                    metrics = c("sessions","users"),
+#                                    dimensions = c("date","medium"))
+#   
+#   expect_s3_class(bq_result, "data.frame")
+#   
+# })
+# 
+# test_that("Can query from BigQuery directly",{
+#   skip_on_cran()
+#   
+#   q <- "SELECT fullVisitorId, visitId, date, hits.hour as hour, hits.minute as minute FROM (TABLE_DATE_RANGE([98288890.ga_sessions_], TIMESTAMP('2016-08-10'), TIMESTAMP('2016-09-01'))) group by fullVisitorId, visitId, date, hour, minute LIMIT 10000"
+#   
+#   bq_result <- google_analytics_bq("mark-edmondson-gde",
+#                                    "98288890",
+#                                    query = q)
+#   
+#   expect_s3_class(bq_result, "data.frame")
+#   
+#   
+# })
